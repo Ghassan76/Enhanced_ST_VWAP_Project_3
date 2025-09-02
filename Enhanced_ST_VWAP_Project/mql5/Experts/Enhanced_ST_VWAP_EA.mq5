@@ -1,11 +1,11 @@
 //+------------------------------------------------------------------+
 //|                                        Enhanced_ST_VWAP_EA.mq5 |
-//|              Enhanced SuperTrend & VWAP Expert Advisor System  |
+//|              Enhanced SuperTrend & VWAP Expert Advisor with FSM |
 //+------------------------------------------------------------------+
 #property copyright "Enhanced ST&VWAP Expert Advisor © 2025"
 #property link      "https://www.mql5.com"
-#property version   "6.00"
-#property description "Enhanced EA with Single Trade Logic, Advanced Analytics & Optimized Performance"
+#property version   "7.00"
+#property description "Enhanced EA with Finite State Machine Architecture & Single Trade Logic"
 
 //+------------------------------------------------------------------+
 //| Include Files                                                    |
@@ -118,7 +118,7 @@ input double  DailyProfitTarget           = 200.0;      // Daily profit target
 input bool    EnableLossLimit             = true;       // Enable daily loss limit
 input double  DailyLossLimit              = 100.0;      // Daily loss limit
 
-// SuperTrend & VWAP Indicator Parameters
+// SuperTrend & VWAP Indicator Parameters - CLEAN PARAMETERS (NO SEPARATORS)
 input group "═══ SuperTrend & VWAP Parameters ═══";
 input ENUM_TIMEFRAMES InpIndTimeframe     = PERIOD_H1;  // Indicator timeframe
 input int     ATRPeriod                   = 22;         // ATR period for SuperTrend
@@ -157,12 +157,10 @@ SessionTime g_sessions[4];                               // Trading sessions
 TradeStats g_dailyStats;                                 // Daily statistics
 datetime g_lastDayReset = 0;                            // Last day reset timestamp
 
-// Enhanced signal tracking variables
-static bool Recount = true;                             // Force recalculation flag
-static bool BUY_Open = false, BUY_Close = false;       // Buy signal flags
-static bool SELL_Open = false, SELL_Close = false;     // Sell signal flags
-static datetime UpSignalTime, DnSignalTime;            // Signal timestamps
+// Signal tracking variables - FIXED FOR PROPER SINGLE TRADE LOGIC
+static bool BUY_Signal = false, SELL_Signal = false;    // Current signal flags
 static datetime g_lastBarTime = 0;                       // Last processed bar time
+static datetime g_lastSignalProcessed = 0;               // Last signal processed time
 
 // Performance monitoring
 static datetime g_lastPerformanceUpdate = 0;
@@ -174,34 +172,11 @@ static datetime g_lastConnectionCheck = 0;
 static bool g_connectionLost = false;
 
 //+------------------------------------------------------------------+
-//| Reset daily trading statistics                                   |
-//+------------------------------------------------------------------+
-void ResetDailyStats()
-{
-    g_dailyStats.totalTrades = 0;
-    g_dailyStats.winTrades = 0;
-    g_dailyStats.loseTrades = 0;
-    g_dailyStats.totalProfit = 0.0;
-    g_dailyStats.totalLoss = 0.0;
-    g_dailyStats.maxDrawdown = 0.0;
-    g_dailyStats.maxProfit = 0.0;
-    g_dailyStats.lastTradeTime = 0;
-    g_dailyStats.averageWin = 0.0;
-    g_dailyStats.averageLoss = 0.0;
-    g_dailyStats.profitFactor = 0.0;
-    g_dailyStats.winRate = 0.0;
-    g_dailyStats.consecutiveWins = 0;
-    g_dailyStats.consecutiveLosses = 0;
-    g_dailyStats.maxConsecutiveWins = 0;
-    g_dailyStats.maxConsecutiveLosses = 0;
-}
-
-//+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
 {
-    Print("═══ Initializing Enhanced ST&VWAP EA v6.0 ═══");
+    Print("═══ Initializing Enhanced ST&VWAP EA v7.0 ═══");
     
     // Initialize trading algorithms
     trade.SetExpertMagicNumber(MagicNumber);
@@ -209,7 +184,7 @@ int OnInit()
     // Configure state durations
     ConfigureStateDurations(FreezeDurationMinutes, PostTradeCooldownMin);
     
-    // Get handle for Enhanced ST&VWAP indicator
+    // FIXED: Get handle for Enhanced ST&VWAP indicator with CLEAN PARAMETERS
     STVWAPHandle = iCustom(_Symbol, InpIndTimeframe, "Enhanced_ST_VWAP_Indicator",
                           ATRPeriod, STMultiplier, SourcePrice, TakeWicksIntoAccount,
                           VWAPPriceMethod, MinVolumeThreshold, ResetVWAPDaily,
@@ -229,9 +204,9 @@ int OnInit()
     InitializeSessions();
     
     // Initialize daily statistics
-    ResetDailyStats();
+    ResetDailyStatistics();
     
-    // Set initial EA state
+    // Set initial EA state to READY
     SetEAState(ST_READY);
     
     // Validate input parameters
@@ -248,7 +223,7 @@ int OnInit()
     // Print initialization summary
     PrintInitializationSummary();
     
-    Print("═══ Enhanced ST&VWAP EA v6.0 initialized successfully ═══");
+    Print("═══ Enhanced ST&VWAP EA v7.0 initialized successfully ═══");
     return(INIT_SUCCEEDED);
 }
 
@@ -257,7 +232,7 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-    Print("═══ Deinitializing Enhanced ST&VWAP EA v6.0 ═══");
+    Print("═══ Deinitializing Enhanced ST&VWAP EA v7.0 ═══");
     
     // Kill timer
     EventKillTimer();
@@ -280,7 +255,7 @@ void OnDeinit(const int reason)
 }
 
 //+------------------------------------------------------------------+
-//| Expert tick function                                             |
+//| Expert tick function - ENHANCED WITH PROPER FSM                 |
 //+------------------------------------------------------------------+
 void OnTick()
 {
@@ -290,11 +265,14 @@ void OnTick()
     if(EnableConnectionMonitor && !MonitorConnection())
         return;
     
-    // Check if EA is ready to trade
-    if(!IsEAReadyToTrade())
+    // FINITE STATE MACHINE - Handle current state
+    ProcessStateMachine();
+    
+    // Only process signals if EA is READY
+    if(GetEAState() != ST_READY)
     {
         if(VerboseLogs && g_totalTicks % 1000 == 0) // Log every 1000 ticks to avoid spam
-            Print("EA not ready to trade. State: ", EnumToString(GetEAState()));
+            Print("EA not ready to trade. State: ", StateToString(GetEAState()));
         return;
     }
     
@@ -329,8 +307,8 @@ void OnTick()
     // Load history for proper indicator calculation
     LoadHistory(TimeCurrent() - PeriodSeconds(InpIndTimeframe) - 1, _Symbol, InpIndTimeframe);
     
-    // Process trading signals with enhanced logic
-    ProcessEnhancedTradingSignals();
+    // Process trading signals with FSM logic
+    ProcessTradingSignalsWithFSM();
     
     // Process advanced position management
     ProcessAdvancedPositionManagement();
@@ -344,88 +322,208 @@ void OnTick()
 }
 
 //+------------------------------------------------------------------+
-//| Enhanced trading signal processing                               |
+//| ENHANCED FINITE STATE MACHINE PROCESSOR                         |
 //+------------------------------------------------------------------+
-void ProcessEnhancedTradingSignals()
+void ProcessStateMachine()
 {
+    EA_STATE currentState = GetEAState();
+    datetime currentTime = TimeCurrent();
+    
+    switch(currentState)
+    {
+        case ST_READY:
+            // Ready to accept signals - main processing happens in OnTick
+            break;
+            
+        case ST_IN_TRADE:
+            // Check if position still exists
+            if(CountActivePositions() == 0)
+            {
+                // Position was closed - enter cooldown or freeze
+                if(PostTradeCooldownMin > 0)
+                {
+                    g_cooldownUntil = currentTime + PostTradeCooldownMin * 60;
+                    SetEAState(ST_COOLDOWN);
+                    Print("Position closed - entering cooldown until: ", TimeToString(g_cooldownUntil));
+                }
+                else
+                {
+                    g_freezeUntil = currentTime + FreezeDurationMinutes * 60;
+                    SetEAState(ST_FROZEN, FREEZE_TRADE_CLOSE);
+                    Print("Position closed - entering freeze until: ", TimeToString(g_freezeUntil));
+                }
+            }
+            break;
+            
+        case ST_FROZEN:
+            // Check if freeze period expired
+            if(currentTime >= g_freezeUntil)
+            {
+                SetEAState(ST_ARMING);
+                Print("Freeze period expired - entering arming state");
+            }
+            break;
+            
+        case ST_COOLDOWN:
+            // Check if cooldown period expired
+            if(currentTime >= g_cooldownUntil)
+            {
+                SetEAState(ST_ARMING);
+                Print("Cooldown period expired - entering arming state");
+            }
+            break;
+            
+        case ST_ARMING:
+            // Reset signal flags and move to ready state
+            BUY_Signal = false;
+            SELL_Signal = false;
+            SetEAState(ST_READY);
+            Print("EA armed and ready for new signals");
+            break;
+    }
+}
+
+//+------------------------------------------------------------------+
+//| ENHANCED TRADING SIGNAL PROCESSING WITH FSM                     |
+//+------------------------------------------------------------------+
+void ProcessTradingSignalsWithFSM()
+{
+    // Only process signals if EA is READY
+    if(GetEAState() != ST_READY)
+        return;
+    
     // Detect new bar
     datetime curBarTime = iTime(_Symbol, InpIndTimeframe, 0);
     bool isNewBar = (curBarTime != g_lastBarTime);
-    if(isNewBar) g_lastBarTime = curBarTime;
-
-    // Check for new bar or force recount
-    if(!SignalBar || isNewBar || Recount)
+    
+    // Only process on new bar or if no previous bar processed
+    if(!isNewBar && g_lastBarTime != 0)
+        return;
+        
+    g_lastBarTime = curBarTime;
+    
+    // Reset signal flags for new bar
+    BUY_Signal = false;
+    SELL_Signal = false;
+    
+    // Get signal from indicator
+    double signal[1];
+    if(CopyBuffer(STVWAPHandle, 6, SignalBar, 1, signal) <= 0) // Buffer 6 is SignalBuffer
     {
-        // Reset signal flags
-        BUY_Open = SELL_Open = BUY_Close = SELL_Close = false;
-        Recount = false;
-
-        // Get signal from indicator
-        double signal[1];
-        if(CopyBuffer(STVWAPHandle, 6, SignalBar, 1, signal) <= 0)
+        if(VerboseLogs) Print("Failed to copy signal buffer from indicator");
+        return;
+    }
+    
+    datetime signalTime = iTime(_Symbol, InpIndTimeframe, SignalBar);
+    double price = iClose(_Symbol, InpIndTimeframe, SignalBar);
+    
+    // Process signal only if it's new and different from last processed
+    if(signalTime <= g_lastSignalProcessed)
+        return;
+    
+    int signalDirection = (signal[0] > 0) ? 1 : (signal[0] < 0) ? -1 : 0;
+    
+    if(signalDirection == 0)
+        return; // No signal
+    
+    // Enhanced signal validation
+    if(!ValidateSignalConditions(signalTime, price, signalDirection))
+        return;
+    
+    // Set signal flags based on direction
+    if(signalDirection > 0 && EnableBuy && EnableEntry)
+    {
+        // Additional confirmation for BUY signals
+        if(EnableSignalConfirmation && !ConfirmBullishSignal())
         {
-            if(VerboseLogs) Print("Failed to copy signal buffer from indicator");
-            Recount = true;
+            if(VerboseLogs) Print("BUY signal confirmation failed");
             return;
         }
-
-        datetime signalTime = iTime(_Symbol, InpIndTimeframe, SignalBar);
-        double price = iClose(_Symbol, InpIndTimeframe, SignalBar);
-
-        int dir = (signal[0] > 0) ? 1 : -1;
-
-        // Enhanced signal validation
-        if(!ValidateSignalConditions(signalTime, price, dir))
+        BUY_Signal = true;
+        g_lastSignalProcessed = signalTime;
+        if(VerboseLogs) Print("VALID BUY signal detected at ", TimeToString(signalTime), " Price: ", DoubleToString(price, _Digits));
+    }
+    else if(signalDirection < 0 && EnableSell && EnableEntry)
+    {
+        // Additional confirmation for SELL signals
+        if(EnableSignalConfirmation && !ConfirmBearishSignal())
+        {
+            if(VerboseLogs) Print("SELL signal confirmation failed");
             return;
-
-        // Process bullish signal
-        if(signal[0] > 0)
-        {
-            if(EnableBuy && EnableEntry && CanOpenNewPosition())
-            {
-                if(EnableSignalConfirmation && !ConfirmBullishSignal())
-                {
-                    if(VerboseLogs) Print("BUY signal confirmation failed");
-                    return;
-                }
-                
-                BUY_Open = true;
-                UpSignalTime = signalTime + TimeShiftSec;
-                
-                if(VerboseLogs)
-                    Print("CONFIRMED BUY signal at ", TimeToString(signalTime), ", Price: ", DoubleToString(price, _Digits));
-            }
-            
-            // Close opposite positions if any exist
-            if(EnableSell && CountActivePositions() > 0)
-                SELL_Close = true;
         }
-        // Process bearish signal
-        else if(signal[0] < 0)
+        SELL_Signal = true;
+        g_lastSignalProcessed = signalTime;
+        if(VerboseLogs) Print("VALID SELL signal detected at ", TimeToString(signalTime), " Price: ", DoubleToString(price, _Digits));
+    }
+    
+    // Execute trades based on signals
+    ExecuteTradesWithFSM();
+}
+
+//+------------------------------------------------------------------+
+//| EXECUTE TRADES WITH FSM LOGIC                                   |
+//+------------------------------------------------------------------+
+void ExecuteTradesWithFSM()
+{
+    // CRITICAL: Only execute if EA is READY and no positions exist
+    if(GetEAState() != ST_READY || CountActivePositions() > 0)
+        return;
+    
+    // Calculate lot size
+    double lotSize = DynamicLots ? CalculateOptimalLot(RiskPct, PointsSL, _Symbol) : FixedLot;
+    MarginMode mmMode = DynamicLots ? FREEMARGIN : LOT;
+    
+    // Execute BUY signal
+    if(BUY_Signal)
+    {
+        int sl = UseMoneyTargets ? CalculatePointsFromMoney(MoneySLAmount, true) : (int)PointsSL;
+        int tp = UseMoneyTargets ? CalculatePointsFromMoney(MoneyTPAmount, false) : (int)PointsTP;
+        
+        if(BuyPositionOpen(true, _Symbol, TimeCurrent(), lotSize, mmMode, SlippagePts, sl, tp, MagicNumber))
         {
-            if(EnableSell && EnableEntry && CanOpenNewPosition())
-            {
-                if(EnableSignalConfirmation && !ConfirmBearishSignal())
-                {
-                    if(VerboseLogs) Print("SELL signal confirmation failed");
-                    return;
-                }
-                
-                SELL_Open = true;
-                DnSignalTime = signalTime + TimeShiftSec;
-                
-                if(VerboseLogs)
-                    Print("CONFIRMED SELL signal at ", TimeToString(signalTime), ", Price: ", DoubleToString(price, _Digits));
-            }
+            SetEAState(ST_IN_TRADE);
+            g_dailyStats.totalTrades++;
+            BUY_Signal = false; // Clear signal after execution
             
-            // Close opposite positions if any exist
-            if(EnableBuy && CountActivePositions() > 0)
-                BUY_Close = true;
+            // Register position for trailing
+            ulong ticket = GetActivePositionTicket();
+            if(ticket > 0 && (EnableBreakEven || EnableSmartTrailing))
+                RegisterPositionTracker(ticket);
+            
+            Print("SUCCESS: BUY position opened. Lot: ", lotSize, " SL: ", sl, " TP: ", tp, " EA State: IN_TRADE");
+        }
+        else
+        {
+            Print("FAILED: Could not open BUY position");
+            BUY_Signal = false; // Clear signal after failed attempt
         }
     }
-
-    // Execute trades with enhanced logic
-    ExecuteEnhancedTrades();
+    
+    // Execute SELL signal
+    if(SELL_Signal)
+    {
+        int sl = UseMoneyTargets ? CalculatePointsFromMoney(MoneySLAmount, true) : (int)PointsSL;
+        int tp = UseMoneyTargets ? CalculatePointsFromMoney(MoneyTPAmount, false) : (int)PointsTP;
+        
+        if(SellPositionOpen(true, _Symbol, TimeCurrent(), lotSize, mmMode, SlippagePts, sl, tp, MagicNumber))
+        {
+            SetEAState(ST_IN_TRADE);
+            g_dailyStats.totalTrades++;
+            SELL_Signal = false; // Clear signal after execution
+            
+            // Register position for trailing
+            ulong ticket = GetActivePositionTicket();
+            if(ticket > 0 && (EnableBreakEven || EnableSmartTrailing))
+                RegisterPositionTracker(ticket);
+            
+            Print("SUCCESS: SELL position opened. Lot: ", lotSize, " SL: ", sl, " TP: ", tp, " EA State: IN_TRADE");
+        }
+        else
+        {
+            Print("FAILED: Could not open SELL position");
+            SELL_Signal = false; // Clear signal after failed attempt
+        }
+    }
 }
 
 //+------------------------------------------------------------------+
@@ -433,10 +531,6 @@ void ProcessEnhancedTradingSignals()
 //+------------------------------------------------------------------+
 bool ValidateSignalConditions(datetime signalTime, double price, int dir)
 {
-    // Check if signal is too recent (avoid duplicates)
-    if(signalTime <= g_lastSignalTime)
-        return false;
-    
     // Trend filter validation
     if(EnableTrendFilter && !ValidateTrendDirection(price, dir))
     {
@@ -569,83 +663,14 @@ bool ValidateVolatility()
 }
 
 //+------------------------------------------------------------------+
-//| Execute enhanced trades with single position logic              |
-//+------------------------------------------------------------------+
-void ExecuteEnhancedTrades()
-{
-    // CRITICAL: Check again if we can open new positions
-    if((BUY_Open || SELL_Open) && !CanOpenNewPosition())
-    {
-        if(VerboseLogs) Print("Trade execution blocked - position already exists or EA not ready");
-        BUY_Open = SELL_Open = false;
-        return;
-    }
-    
-    // Calculate lot size
-    double lotSize = DynamicLots ? CalculateOptimalLot(RiskPct, PointsSL, _Symbol) : FixedLot;
-    MarginMode mmMode = DynamicLots ? FREEMARGIN : LOT;
-    
-    // Close positions first (if any exist and signals require it)
-    if(BUY_Close)
-    {
-        if(SellPositionClose(true, _Symbol, SlippagePts, MagicNumber))
-        {
-            if(VerboseLogs) Print("SELL position closed due to BUY signal");
-        }
-    }
-        
-    if(SELL_Close)
-    {
-        if(BuyPositionClose(true, _Symbol, SlippagePts, MagicNumber))
-        {
-            if(VerboseLogs) Print("BUY position closed due to SELL signal");
-        }
-    }
-    
-    // Open new positions with enhanced validation
-    if(BUY_Open && CanOpenNewPosition()) // Double-check before opening
-    {
-        int sl = UseMoneyTargets ? CalculatePointsFromMoney(MoneySLAmount, true) : (int)PointsSL;
-        int tp = UseMoneyTargets ? CalculatePointsFromMoney(MoneyTPAmount, false) : (int)PointsTP;
-        
-        if(BuyPositionOpen(true, _Symbol, UpSignalTime, lotSize, mmMode, SlippagePts, sl, tp, MagicNumber))
-        {
-            g_dailyStats.totalTrades++;
-            g_lastSignalTime = UpSignalTime;
-            if(VerboseLogs) Print("SUCCESS: BUY position opened. Lot: ", lotSize, " SL: ", sl, " TP: ", tp);
-        }
-        else
-        {
-            Print("FAILED: Could not open BUY position");
-        }
-    }
-    
-    if(SELL_Open && CanOpenNewPosition()) // Double-check before opening
-    {
-        int sl = UseMoneyTargets ? CalculatePointsFromMoney(MoneySLAmount, true) : (int)PointsSL;
-        int tp = UseMoneyTargets ? CalculatePointsFromMoney(MoneyTPAmount, false) : (int)PointsTP;
-        
-        if(SellPositionOpen(true, _Symbol, DnSignalTime, lotSize, mmMode, SlippagePts, sl, tp, MagicNumber))
-        {
-            g_dailyStats.totalTrades++;
-            g_lastSignalTime = DnSignalTime;
-            if(VerboseLogs) Print("SUCCESS: SELL position opened. Lot: ", lotSize, " SL: ", sl, " TP: ", tp);
-        }
-        else
-        {
-            Print("FAILED: Could not open SELL position");
-        }
-    }
-    
-    // Reset signal flags
-    BUY_Open = SELL_Open = BUY_Close = SELL_Close = false;
-}
-
-//+------------------------------------------------------------------+
 //| Process advanced position management                             |
 //+------------------------------------------------------------------+
 void ProcessAdvancedPositionManagement()
 {
+    // Only process if we have positions
+    if(CountActivePositions() == 0)
+        return;
+        
     // Break-even management
     if(EnableBreakEven)
         ProcessBreakEven(BreakEvenPercent, BESLPctOfTP);
@@ -677,7 +702,6 @@ bool CheckMarketConditions()
         return false;
     }
     
-    // Market condition is good
     return true;
 }
 
@@ -759,26 +783,31 @@ bool CheckTimeRange(int hour, int minute, int startHour, int startMinute, int en
 //+------------------------------------------------------------------+
 bool CheckDailyLimits()
 {
+    // Get daily statistics
+    double dayTrades = GlobalVariableGet(GV("dayTrades", MagicNumber));
+    double dayProfit = GlobalVariableGet(GV("dayProfit", MagicNumber));
+    double dayLoss = GlobalVariableGet(GV("dayLoss", MagicNumber));
+    
     // Check maximum trades per day
-    if(EnableMaxTradesPerDay && g_dailyStats.totalTrades >= MaxTradesPerDay)
+    if(EnableMaxTradesPerDay && dayTrades >= MaxTradesPerDay)
     {
-        if(VerboseLogs) Print("Daily trade limit reached: ", g_dailyStats.totalTrades, "/", MaxTradesPerDay);
+        if(VerboseLogs) Print("Daily trade limit reached: ", (int)dayTrades, "/", MaxTradesPerDay);
         SetEAState(ST_FROZEN, FREEZE_DAILY_LIMIT);
         return false;
     }
     
     // Check daily profit target
-    if(EnableProfitCap && (g_dailyStats.totalProfit - g_dailyStats.totalLoss) >= DailyProfitTarget)
+    if(EnableProfitCap && (dayProfit - dayLoss) >= DailyProfitTarget)
     {
-        if(VerboseLogs) Print("Daily profit target reached: ", DoubleToString(g_dailyStats.totalProfit - g_dailyStats.totalLoss, 2));
+        if(VerboseLogs) Print("Daily profit target reached: ", DoubleToString(dayProfit - dayLoss, 2));
         SetEAState(ST_FROZEN, FREEZE_DAILY_LIMIT);
         return false;
     }
     
     // Check daily loss limit
-    if(EnableLossLimit && (g_dailyStats.totalProfit - g_dailyStats.totalLoss) <= -DailyLossLimit)
+    if(EnableLossLimit && (dayProfit - dayLoss) <= -DailyLossLimit)
     {
-        if(VerboseLogs) Print("Daily loss limit reached: ", DoubleToString(g_dailyStats.totalProfit - g_dailyStats.totalLoss, 2));
+        if(VerboseLogs) Print("Daily loss limit reached: ", DoubleToString(dayProfit - dayLoss, 2));
         SetEAState(ST_FROZEN, FREEZE_DAILY_LIMIT);
         return false;
     }
@@ -927,6 +956,8 @@ void PrintInitializationSummary()
     Print("Daily Limits: Trades=", EnableMaxTradesPerDay ? (string)MaxTradesPerDay : "Unlimited", 
           " Loss=", EnableLossLimit ? DoubleToString(DailyLossLimit, 2) : "Unlimited");
     Print("Time Filter: ", UseTimeFilter ? StringFormat("%02d:%02d-%02d:%02d", BeginHour, BeginMinute, EndHour, EndMinute) : "Disabled");
+    Print("FSM Architecture: ENABLED");
+    Print("Single Trade Logic: ENABLED");
     Print("═══ Configuration Complete ═══");
 }
 
@@ -950,7 +981,6 @@ void CheckDailyReset()
         }
             
         ResetDailyStatistics();
-        ResetDailyStats();
         g_lastDayReset = currentDay;
         
         if(VerboseLogs)
@@ -968,9 +998,9 @@ void UpdatePerformanceStatistics()
     double tickEfficiency = g_totalTicks > 0 ? (double)g_processedTicks / g_totalTicks * 100.0 : 0;
     
     Print("═══ Performance Statistics ═══");
+    Print("EA State: ", StateToString(GetEAState()));
     Print("Total Ticks: ", g_totalTicks);
     Print("Processed Ticks: ", g_processedTicks, " (", DoubleToString(tickEfficiency, 2), "%)");
-    Print("EA State: ", EnumToString(GetEAState()));
     Print("Active Positions: ", CountActivePositions());
     Print("Memory Usage: ", TerminalInfoInteger(TERMINAL_MEMORY_USED), " MB");
     Print("═══ Performance Update Complete ═══");
@@ -986,7 +1016,7 @@ void PrintPerformanceSummary()
     Print("Total Ticks Processed: ", g_processedTicks);
     double efficiency = g_totalTicks > 0 ? (double)g_processedTicks / g_totalTicks * 100.0 : 0;
     Print("Processing Efficiency: ", DoubleToString(efficiency, 2), "%");
-    Print("Final EA State: ", EnumToString(GetEAState()));
+    Print("Final EA State: ", StateToString(GetEAState()));
     Print("═══ Performance Summary Complete ═══");
 }
 
@@ -1037,10 +1067,6 @@ void OnTradeTransaction(const MqlTradeTransaction& trans,
                     ulong ticket = HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
                     RemovePositionTracker(ticket);
                     
-                    // Set cooldown state only if no other positions exist
-                    if(CountActivePositions() == 0)
-                        SetEAState(ST_COOLDOWN);
-                    
                     if(VerboseLogs)
                     {
                         Print("═══ Trade Closed ═══");
@@ -1048,6 +1074,7 @@ void OnTradeTransaction(const MqlTradeTransaction& trans,
                         Print("Profit: ", DoubleToString(profit, 2));
                         Print("New Balance: ", DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2));
                         Print("Active Positions: ", CountActivePositions());
+                        Print("EA State will change in next tick");
                         Print("═══ Trade Close Complete ═══");
                     }
                 }
