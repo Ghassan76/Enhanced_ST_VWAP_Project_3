@@ -538,6 +538,10 @@ bool BuyPositionOpen(bool signal, string symbol, datetime signalTime,
       {
          success = true;
          ulong ticket = trade.ResultOrder();
+         if(ticket == 0)
+            ticket = trade.ResultDeal();
+         if(ticket == 0 && PositionSelect(symbol))
+            ticket = (ulong)PositionGetInteger(POSITION_TICKET);
          
          // Add position tracker
          AddPositionTracker(ticket, price, sl, tp, POSITION_TYPE_BUY);
@@ -632,6 +636,10 @@ bool SellPositionOpen(bool signal, string symbol, datetime signalTime,
       {
          success = true;
          ulong ticket = trade.ResultOrder();
+         if(ticket == 0)
+            ticket = trade.ResultDeal();
+         if(ticket == 0 && PositionSelect(symbol))
+            ticket = (ulong)PositionGetInteger(POSITION_TICKET);
          
          // Add position tracker
          AddPositionTracker(ticket, price, sl, tp, POSITION_TYPE_SELL);

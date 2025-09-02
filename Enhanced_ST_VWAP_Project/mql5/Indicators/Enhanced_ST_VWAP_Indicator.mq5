@@ -37,24 +37,24 @@
 #property indicator_type6 DRAW_NONE
 
 //--- Enhanced Input Parameters ---
-input string Separator1 = "═══ SuperTrend Settings ═══";
+input group "═══ SuperTrend Settings ═══";
 input int ATRPeriod = 22;                    // ATR period for SuperTrend
 input double Multiplier = 3.0;               // SuperTrend multiplier
 input ENUM_APPLIED_PRICE SourcePrice = PRICE_MEDIAN; // Price for SuperTrend calculation
 input bool TakeWicksIntoAccount = true;      // Consider wicks in calculation
 
-input string Separator2 = "═══ VWAP Settings ═══";
+input group "═══ VWAP Settings ═══";
 input ENUM_APPLIED_PRICE VWAPPriceMethod = PRICE_TYPICAL; // VWAP calculation price
 input double MinVolumeThreshold = 1.0;       // Minimum volume for VWAP
 input bool ResetVWAPDaily = true;            // Reset VWAP daily
 input int VWAPLookbackPeriod = 100;         // VWAP calculation lookback
 
-input string Separator3 = "═══ VWAP Filter Settings ═══";
+input group "═══ VWAP Filter Settings ═══";
 input bool EnableVWAPFilter = true;          // Enable VWAP filtering
 input bool ShowVWAPLine = true;              // Show VWAP line on chart
 input double MinPointsFromVWAP = 0.0;        // Minimum distance from VWAP in points
 
-input string Separator4 = "═══ Time Window Settings ═══";
+input group "═══ Time Window Settings ═══";
 input bool EnableTimeWindow = false;         // Enable time window filtering
 input int StartHour = 9;                     // Trading start hour
 input int StartMinute = 30;                  // Trading start minute
@@ -68,13 +68,13 @@ enum TimeWindowMode
 };
 input TimeWindowMode WindowMode = MODE_DASHBOARD_ONLY;
 
-input string Separator5 = "═══ Performance Settings ═══";
+input group "═══ Performance Settings ═══";
 input bool EnableWinRate = true;             // Enable win rate calculation
 input double WinThresholdPoints = 10.0;      // Target threshold in points for win condition
 input int SignalLifetimeBars = 200;         // Signal arrow lifetime in bars
 input bool EnableAdvancedStats = true;       // Enable advanced statistics
 
-input string Separator6 = "═══ Enhanced Dashboard Settings ═══";
+input group "═══ Enhanced Dashboard Settings ═══";
 input bool ShowDashboard = true;             // Show dashboard
 input int DashboardX = 20;                   // Dashboard X position
 input int DashboardY = 30;                   // Dashboard Y position
@@ -84,28 +84,28 @@ input color DashboardBackColor = C'25,25,25'; // Dashboard background color
 input color DashboardBorderColor = clrGray;  // Dashboard border color
 input color DashboardTextColor = clrWhite;   // Dashboard text color
 
-input string Separator7 = "═══ Column Layout Settings ═══";
+input group "═══ Column Layout Settings ═══";
 input int LabelXOffset = 10;                 // Label column X position
 input int LabelFontSize = 9;                 // Label font size
 input int ValueXOffset = 260;                // Value column X position  
 input int ValueFontSize = 9;                 // Value font size
 input string DashboardFont = "Consolas";     // Dashboard font
 
-input string Separator8 = "═══ Visual Feedback Settings ═══";
+input group "═══ Visual Feedback Settings ═══";
 input bool EnableVisualFeedback = true;      // Enable visual signal feedback
 input int CircleWidth = 3;                   // Signal circle width
 input color RejectionColor = clrGray;        // Rejected signal color
 input color BullishAcceptColor = clrDodgerBlue; // Bullish accepted signal color
 input color BearishAcceptColor = clrWhite;   // Bearish accepted signal color
 
-input string Separator9 = "═══ Advanced Settings ═══";
+input group "═══ Advanced Settings ═══";
 input bool ShowDebugInfo = false;            // Show debug information
 input int MaxObjectsOnChart = 500;           // Maximum objects on chart
 input bool ShowTooltips = true;              // Show signal tooltips
 input int ObjectCleanupThreshold = 250;      // Object cleanup threshold
 input bool OptimizeCalculations = true;      // Optimize calculations for performance
 
-input string Separator10 = "═══ Alert Settings ═══";
+input group "═══ Alert Settings ═══";
 input bool EnableAlerts = false;             // Enable alerts
 input bool AlertSound = true;                // Alert sound
 input bool AlertPopup = true;                // Alert popup
@@ -227,19 +227,21 @@ int OnInit()
 
    // Set plot properties
    PlotIndexSetInteger(3, PLOT_ARROW, 233);  // Up arrow for buy signals
-   PlotIndexSetInteger(4, PLOT_ARROW, 234);  // Down arrow for sell signals  
+   PlotIndexSetInteger(4, PLOT_ARROW, 234);  // Down arrow for sell signals
    PlotIndexSetInteger(5, PLOT_ARROW, 159);  // Dot for rejected signals
+   if(!ShowVWAPLine)
+      PlotIndexSetInteger(1, PLOT_DRAW_TYPE, DRAW_NONE);
 
-   // Set array directions
-   ArraySetAsSeries(STBuffer, false);
-   ArraySetAsSeries(STColorBuffer, false);
-   ArraySetAsSeries(VWAPBuffer, false);
-   ArraySetAsSeries(BuyArrowBuffer, false);
-   ArraySetAsSeries(SellArrowBuffer, false);
-   ArraySetAsSeries(RejectArrowBuffer, false);
-   ArraySetAsSeries(SignalBuffer, false);
-   ArraySetAsSeries(TrendBuffer, false);
-   ArraySetAsSeries(StrengthBuffer, false);
+   // Set array directions to time series (0 = current bar)
+   ArraySetAsSeries(STBuffer, true);
+   ArraySetAsSeries(STColorBuffer, true);
+   ArraySetAsSeries(VWAPBuffer, true);
+   ArraySetAsSeries(BuyArrowBuffer, true);
+   ArraySetAsSeries(SellArrowBuffer, true);
+   ArraySetAsSeries(RejectArrowBuffer, true);
+   ArraySetAsSeries(SignalBuffer, true);
+   ArraySetAsSeries(TrendBuffer, true);
+   ArraySetAsSeries(StrengthBuffer, true);
 
    // Set indicator properties
    IndicatorSetString(INDICATOR_SHORTNAME, "Enhanced ST&VWAP v5.0");
@@ -288,55 +290,51 @@ int OnCalculate(const int rates_total,
    if(rates_total <= ATRPeriod)
       return(0);
 
-   int start = prev_calculated > 0 ? prev_calculated - 1 : ATRPeriod;
-   
+   int start = (prev_calculated == 0) ? rates_total - 1 : rates_total - prev_calculated;
+
    // Performance optimization: skip if same bar already calculated
    if(OptimizeCalculations && start == g_lastCalculatedBar && prev_calculated > 0)
       return(rates_total);
 
    double atr[];
-   ArraySetAsSeries(atr, false);
+   ArraySetAsSeries(atr, true);
 
-   // Main calculation loop
-   for(int i = start; i < rates_total; i++)
+   // Main calculation loop using time series indexing
+   for(int shift = start; shift >= 0; --shift)
    {
       // Initialize buffers
-      BuyArrowBuffer[i] = EMPTY_VALUE;
-      SellArrowBuffer[i] = EMPTY_VALUE;
-      RejectArrowBuffer[i] = EMPTY_VALUE;
-      SignalBuffer[i] = 0.0;
-      TrendBuffer[i] = 0.0;
-      StrengthBuffer[i] = 0.0;
+      BuyArrowBuffer[shift] = EMPTY_VALUE;
+      SellArrowBuffer[shift] = EMPTY_VALUE;
+      RejectArrowBuffer[shift] = EMPTY_VALUE;
+      SignalBuffer[shift] = 0.0;
+      TrendBuffer[shift] = 0.0;
+      StrengthBuffer[shift] = 0.0;
 
       // Enhanced VWAP calculation with lookback period
-      CalculateEnhancedVWAP(i, time, high, low, close, tick_volume);
+      CalculateEnhancedVWAP(shift, rates_total, time, high, low, close, tick_volume);
 
       // Get ATR value
-      if(CopyBuffer(atrHandle, 0, rates_total - i - 1, 1, atr) <= 0)
-         atr[0] = 0.001; // Fallback value
-      
+      if(CopyBuffer(atrHandle, 0, shift, 1, atr) <= 0)
+         atr[0] = close[shift] * 0.001; // Fallback value
+
       double atrValue = atr[0];
-      if(atrValue <= 0) 
-         atrValue = close[i] * 0.001; // 0.1% fallback
+      if(atrValue <= 0)
+         atrValue = close[shift] * 0.001; // 0.1% fallback
 
       // Enhanced SuperTrend calculation
-      CalculateEnhancedSuperTrend(i, high, low, close, open, atrValue);
+      CalculateEnhancedSuperTrend(shift, rates_total, high, low, close, open, atrValue);
 
       // Enhanced signal processing with market condition analysis
-      ProcessEnhancedSignals(i, time, high, low, close);
+      ProcessEnhancedSignals(shift, time, high, low, close);
    }
 
-   // Update market condition analysis
+   // Update market condition analysis using latest bar
    if(rates_total > ATRPeriod + 20)
-      UpdateMarketCondition(rates_total - 1, high, low, close);
-
-   // Hide VWAP line if disabled
-   if(!ShowVWAPLine)
-      PlotIndexSetInteger(1, PLOT_DRAW_TYPE, DRAW_NONE);
+      UpdateMarketCondition(0, high, low, close);
 
    // Update dashboard
    if(ShowDashboard && rates_total > 0)
-      UpdateDashboard(rates_total - 1);
+      UpdateDashboard(0);
 
    // Clean up old signal objects periodically
    static int cleanupCounter = 0;
@@ -353,11 +351,11 @@ int OnCalculate(const int rates_total,
 //+------------------------------------------------------------------+
 //| Enhanced VWAP calculation with lookback period                  |
 //+------------------------------------------------------------------+
-void CalculateEnhancedVWAP(int index, const datetime &time[], const double &high[], 
-                          const double &low[], const double &close[], const long &tick_volume[])
+void CalculateEnhancedVWAP(int shift, int rates_total, const datetime &time[],
+                          const double &high[], const double &low[], const double &close[], const long &tick_volume[])
 {
    MqlDateTime t;
-   TimeToStruct(time[index], t);
+   TimeToStruct(time[shift], t);
    datetime day = StringToTime(StringFormat("%04d.%02d.%02d", t.year, t.mon, t.day));
    
    // Reset VWAP daily or use lookback period
@@ -367,82 +365,84 @@ void CalculateEnhancedVWAP(int index, const datetime &time[], const double &high
       g_sumPV = 0.0;
       g_sumV = 0.0;
    }
-   else if(!ResetVWAPDaily && index >= VWAPLookbackPeriod)
+   else if(!ResetVWAPDaily)
    {
-      // Rolling VWAP calculation
-      g_sumPV = 0.0;
-      g_sumV = 0.0;
-      int startIdx = index - VWAPLookbackPeriod + 1;
-      
-      for(int j = startIdx; j <= index; j++)
+      int endShift = shift + VWAPLookbackPeriod - 1;
+      if(endShift < rates_total)
       {
-         double price = GetVWAPPrice(j, high, low, close);
-         double vol = (double)tick_volume[j];
-         if(vol < MinVolumeThreshold) vol = MinVolumeThreshold;
-         
-         g_sumPV += price * vol;
-         g_sumV += vol;
+         double sumPV = 0.0;
+         double sumV = 0.0;
+
+         for(int j = endShift; j >= shift; --j)
+         {
+            double price = GetVWAPPrice(j, high, low, close);
+            double vol = (double)tick_volume[j];
+            if(vol < MinVolumeThreshold) vol = MinVolumeThreshold;
+
+            sumPV += price * vol;
+            sumV += vol;
+         }
+
+         VWAPBuffer[shift] = sumV > 0 ? sumPV / sumV : close[shift];
+         return;
       }
-      
-      VWAPBuffer[index] = g_sumV > 0 ? g_sumPV / g_sumV : close[index];
-      return;
    }
-   
+
    // Standard VWAP calculation
-   double price = GetVWAPPrice(index, high, low, close);
-   double vol = (double)tick_volume[index];
+   double price = GetVWAPPrice(shift, high, low, close);
+   double vol = (double)tick_volume[shift];
    if(vol < MinVolumeThreshold) vol = MinVolumeThreshold;
    
    g_sumPV += price * vol;
    g_sumV += vol;
-   VWAPBuffer[index] = g_sumV > 0 ? g_sumPV / g_sumV : price;
+   VWAPBuffer[shift] = g_sumV > 0 ? g_sumPV / g_sumV : price;
 }
 
 //+------------------------------------------------------------------+
 //| Get VWAP price based on price method                            |
 //+------------------------------------------------------------------+
-double GetVWAPPrice(int index, const double &high[], const double &low[], const double &close[])
+double GetVWAPPrice(int shift, const double &high[], const double &low[], const double &close[])
 {
    switch(VWAPPriceMethod)
    {
-      case PRICE_CLOSE: return close[index];
-      case PRICE_HIGH: return high[index];
-      case PRICE_LOW: return low[index];
-      case PRICE_MEDIAN: return (high[index] + low[index]) / 2.0;
-      case PRICE_TYPICAL: return (high[index] + low[index] + close[index]) / 3.0;
-      case PRICE_WEIGHTED: return (high[index] + low[index] + close[index] + close[index]) / 4.0;
-      default: return (high[index] + low[index] + close[index]) / 3.0;
+      case PRICE_CLOSE: return close[shift];
+      case PRICE_HIGH: return high[shift];
+      case PRICE_LOW: return low[shift];
+      case PRICE_MEDIAN: return (high[shift] + low[shift]) / 2.0;
+      case PRICE_TYPICAL: return (high[shift] + low[shift] + close[shift]) / 3.0;
+      case PRICE_WEIGHTED: return (high[shift] + low[shift] + close[shift] + close[shift]) / 4.0;
+      default: return (high[shift] + low[shift] + close[shift]) / 3.0;
    }
 }
 
 //+------------------------------------------------------------------+
 //| Enhanced SuperTrend calculation                                 |
 //+------------------------------------------------------------------+
-void CalculateEnhancedSuperTrend(int index, const double &high[], const double &low[], 
+void CalculateEnhancedSuperTrend(int shift, int rates_total, const double &high[], const double &low[],
                                 const double &close[], const double &open[], double atrValue)
 {
    // Get source price
-   double src = GetSourcePrice(index, high, low, close, open);
-   
+   double src = GetSourcePrice(shift, high, low, close, open);
+
    // Consider wicks or body only
-   double highPrice = TakeWicksIntoAccount ? high[index] : MathMax(open[index], close[index]);
-   double lowPrice = TakeWicksIntoAccount ? low[index] : MathMin(open[index], close[index]);
+   double highPrice = TakeWicksIntoAccount ? high[shift] : MathMax(open[shift], close[shift]);
+   double lowPrice = TakeWicksIntoAccount ? low[shift] : MathMin(open[shift], close[shift]);
 
    // Calculate SuperTrend levels
    double longStop = src - Multiplier * atrValue;
    double shortStop = src + Multiplier * atrValue;
 
    int direction = 1; // Default bullish
-   
-   if(index > 0)
+
+   if(shift + 1 < rates_total)
    {
-      double prevST = STBuffer[index - 1];
-      int prevDir = (int)STColorBuffer[index - 1] == 0 ? 1 : -1;
-      
+      double prevST = STBuffer[shift + 1];
+      int prevDir = (int)STColorBuffer[shift + 1] == 0 ? 1 : -1;
+
       // Adjust stops based on previous values
       longStop = prevDir == 1 ? MathMax(longStop, prevST) : longStop;
       shortStop = prevDir == -1 ? MathMin(shortStop, prevST) : shortStop;
-      
+
       // Determine direction change
       if(prevDir == 1)
          direction = (lowPrice < prevST) ? -1 : 1;
@@ -451,127 +451,118 @@ void CalculateEnhancedSuperTrend(int index, const double &high[], const double &
    }
 
    // Set SuperTrend values
-   STBuffer[index] = (direction == 1) ? longStop : shortStop;
-   STColorBuffer[index] = (direction == 1) ? 0 : 1;
-   TrendBuffer[index] = direction;
-   
+   STBuffer[shift] = (direction == 1) ? longStop : shortStop;
+   STColorBuffer[shift] = (direction == 1) ? 0 : 1;
+   TrendBuffer[shift] = direction;
+
    // Calculate trend strength
-   if(index > 10)
+   if(shift + 10 < rates_total)
    {
-      double priceChange = MathAbs(close[index] - close[index - 10]);
+      double priceChange = MathAbs(close[shift] - close[shift + 10]);
       double atrAvg = 0;
       for(int j = 0; j < 10; j++)
       {
          double tempATR[];
-         if(CopyBuffer(atrHandle, 0, index - j, 1, tempATR) > 0)
+         if(CopyBuffer(atrHandle, 0, shift + j, 1, tempATR) > 0)
             atrAvg += tempATR[0];
       }
       atrAvg /= 10.0;
-      StrengthBuffer[index] = atrAvg > 0 ? priceChange / atrAvg : 0;
+      StrengthBuffer[shift] = atrAvg > 0 ? priceChange / atrAvg : 0;
    }
 }
 
 //+------------------------------------------------------------------+
 //| Get source price based on price method                          |
 //+------------------------------------------------------------------+
-double GetSourcePrice(int index, const double &high[], const double &low[], 
+double GetSourcePrice(int shift, const double &high[], const double &low[],
                      const double &close[], const double &open[])
 {
    switch(SourcePrice)
    {
-      case PRICE_CLOSE: return close[index];
-      case PRICE_OPEN: return open[index];
-      case PRICE_HIGH: return high[index];
-      case PRICE_LOW: return low[index];
-      case PRICE_MEDIAN: return (high[index] + low[index]) / 2.0;
-      case PRICE_TYPICAL: return (high[index] + low[index] + close[index]) / 3.0;
-      case PRICE_WEIGHTED: return (high[index] + low[index] + close[index] + close[index]) / 4.0;
-      default: return (high[index] + low[index]) / 2.0;
+      case PRICE_CLOSE: return close[shift];
+      case PRICE_OPEN: return open[shift];
+      case PRICE_HIGH: return high[shift];
+      case PRICE_LOW: return low[shift];
+      case PRICE_MEDIAN: return (high[shift] + low[shift]) / 2.0;
+      case PRICE_TYPICAL: return (high[shift] + low[shift] + close[shift]) / 3.0;
+      case PRICE_WEIGHTED: return (high[shift] + low[shift] + close[shift] + close[shift]) / 4.0;
+      default: return (high[shift] + low[shift]) / 2.0;
    }
 }
 
 //+------------------------------------------------------------------+
 //| Enhanced signal processing with market condition analysis       |
 //+------------------------------------------------------------------+
-void ProcessEnhancedSignals(int index, const datetime &time[], const double &high[], 
+void ProcessEnhancedSignals(int shift, const datetime &time[], const double &high[],
                            const double &low[], const double &close[])
 {
-   if(index <= 0) return;
-   
-   double prevST = STBuffer[index - 1];
-   int prevDir = (int)STColorBuffer[index - 1] == 0 ? 1 : -1;
-   int currentDir = (int)STColorBuffer[index] == 0 ? 1 : -1;
-   
+   if(shift + 1 >= Bars(_Symbol, PERIOD_CURRENT)) return;
+
+   double prevST = STBuffer[shift + 1];
+   int prevDir = (int)STColorBuffer[shift + 1] == 0 ? 1 : -1;
+   int currentDir = (int)STColorBuffer[shift] == 0 ? 1 : -1;
+
    // Check for direction change (signal generation)
    if(currentDir != prevDir)
    {
       bool vwapOK = true;
       bool timeOK = true;
-      
+
       // VWAP filter validation
       if(EnableVWAPFilter)
       {
-         double distPoints = MathAbs(close[index] - VWAPBuffer[index]) / _Point;
-         if(currentDir == 1) // Bullish signal
-            vwapOK = close[index] > VWAPBuffer[index] && distPoints >= MinPointsFromVWAP;
-         else // Bearish signal
-            vwapOK = close[index] < VWAPBuffer[index] && distPoints >= MinPointsFromVWAP;
+         double distPoints = MathAbs(close[shift] - VWAPBuffer[shift]) / _Point;
+         if(currentDir == 1)
+            vwapOK = close[shift] > VWAPBuffer[shift] && distPoints >= MinPointsFromVWAP;
+         else
+            vwapOK = close[shift] < VWAPBuffer[shift] && distPoints >= MinPointsFromVWAP;
       }
-      
+
       // Time window validation
       if(EnableTimeWindow && (WindowMode == MODE_SIGNALS_ONLY || WindowMode == MODE_BOTH))
-      {
-         timeOK = IsInTimeWindow(time[index]);
-      }
-      
+         timeOK = IsInTimeWindow(time[shift]);
+
       // Market condition validation
-      bool marketOK = IsMarketConditionFavorable(index);
-      
+      bool marketOK = IsMarketConditionFavorable(shift);
+
       // Update signal statistics
       g_signalStats.totalSignals++;
-      
+
       if(vwapOK && timeOK && marketOK)
       {
-         // Signal accepted
          g_signalStats.acceptedSignals++;
-         
-         if(currentDir == 1) // Bullish signal
+
+         if(currentDir == 1)
          {
             g_signalStats.bullishSignals++;
             g_signalStats.bullishAccepted++;
-            BuyArrowBuffer[index] = low[index] - 2 * _Point;
-            SignalBuffer[index] = 1.0;
-            
-            // Create enhanced visual feedback
+            BuyArrowBuffer[shift] = low[shift] - 2 * _Point;
+            SignalBuffer[shift] = 1.0;
             if(EnableVisualFeedback)
-               CreateSignalObject(index, time[index], BuyArrowBuffer[index], "BUY", BullishAcceptColor);
+               CreateSignalObject(shift, time[shift], BuyArrowBuffer[shift], "BUY", BullishAcceptColor);
          }
-         else // Bearish signal
+         else
          {
             g_signalStats.bearishSignals++;
             g_signalStats.bearishAccepted++;
-            SellArrowBuffer[index] = high[index] + 2 * _Point;
-            SignalBuffer[index] = -1.0;
-            
-            // Create enhanced visual feedback
+            SellArrowBuffer[shift] = high[shift] + 2 * _Point;
+            SignalBuffer[shift] = -1.0;
             if(EnableVisualFeedback)
-               CreateSignalObject(index, time[index], SellArrowBuffer[index], "SELL", BearishAcceptColor);
+               CreateSignalObject(shift, time[shift], SellArrowBuffer[shift], "SELL", BearishAcceptColor);
          }
-         
-         // Alert handling
+
          if(EnableAlerts)
          {
-            string alertMsg = StringFormat("ST&VWAP %s Signal at %.5f", 
-                                         currentDir == 1 ? "BUY" : "SELL", close[index]);
+            string alertMsg = StringFormat("ST&VWAP %s Signal at %.5f",
+                                         currentDir == 1 ? "BUY" : "SELL", close[shift]);
             if(AlertPopup) Alert(alertMsg);
             if(AlertSound) PlaySound(AlertSoundFile);
          }
       }
       else
       {
-         // Signal rejected
          g_signalStats.rejectedSignals++;
-         
+
          if(currentDir == 1)
          {
             g_signalStats.bullishSignals++;
@@ -582,17 +573,14 @@ void ProcessEnhancedSignals(int index, const datetime &time[], const double &hig
             g_signalStats.bearishSignals++;
             g_signalStats.bearishRejected++;
          }
-         
-         RejectArrowBuffer[index] = currentDir == 1 ? low[index] - _Point : high[index] + _Point;
-         
-         // Create rejection visual feedback
+
+         RejectArrowBuffer[shift] = currentDir == 1 ? low[shift] - _Point : high[shift] + _Point;
          if(EnableVisualFeedback)
-            CreateSignalObject(index, time[index], RejectArrowBuffer[index], "REJECTED", RejectionColor);
+            CreateSignalObject(shift, time[shift], RejectArrowBuffer[shift], "REJECTED", RejectionColor);
       }
-      
-      // Update performance statistics if enabled
+
       if(EnableWinRate && EnableAdvancedStats)
-         UpdatePerformanceStats(index, currentDir, close);
+         UpdatePerformanceStats(shift, currentDir, close);
    }
 }
 
@@ -617,7 +605,7 @@ bool IsInTimeWindow(datetime time)
 //+------------------------------------------------------------------+
 //| Check if market condition is favorable for trading              |
 //+------------------------------------------------------------------+
-bool IsMarketConditionFavorable(int index)
+bool IsMarketConditionFavorable(int shift)
 {
    // Basic market condition checks
    double spread = (double)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);
@@ -627,7 +615,7 @@ bool IsMarketConditionFavorable(int index)
       return false;
    
    // Check volatility using trend strength
-   if(StrengthBuffer[index] < 0.5) // Low volatility threshold
+   if(StrengthBuffer[shift] < 0.5) // Low volatility threshold
       return false;
    
    return true;
@@ -636,33 +624,33 @@ bool IsMarketConditionFavorable(int index)
 //+------------------------------------------------------------------+
 //| Update market condition analysis                                |
 //+------------------------------------------------------------------+
-void UpdateMarketCondition(int index, const double &high[], const double &low[], const double &close[])
+void UpdateMarketCondition(int shift, const double &high[], const double &low[], const double &close[])
 {
-   if(index < 20) return;
-   
+   if(shift + 20 >= Bars(_Symbol, PERIOD_CURRENT)) return;
+
    // Calculate volatility (ATR-based)
    double atr[];
-   if(CopyBuffer(atrHandle, 0, index - 19, 20, atr) == 20)
+   if(CopyBuffer(atrHandle, 0, shift + 19, 20, atr) == 20)
    {
       double avgATR = 0;
       for(int i = 0; i < 20; i++)
          avgATR += atr[i];
       avgATR /= 20.0;
-      
+
       g_marketCondition.volatility = avgATR;
-      g_marketCondition.isHighVolatility = avgATR > (close[index] * 0.001); // 0.1% threshold
+      g_marketCondition.isHighVolatility = avgATR > (close[shift] * 0.001); // 0.1% threshold
    }
-   
+
    // Calculate trend strength
-   double priceChange = MathAbs(close[index] - close[index - 10]);
+   double priceChange = MathAbs(close[shift] - close[shift + 10]);
    double range = 0;
-   for(int i = index - 9; i <= index; i++)
+   for(int i = shift + 9; i >= shift; --i)
       range += high[i] - low[i];
    range /= 10.0;
-   
+
    g_marketCondition.trendStrength = range > 0 ? priceChange / range : 0;
    g_marketCondition.isStrongTrend = g_marketCondition.trendStrength > 0.7;
-   
+
    // Determine market phase
    if(g_marketCondition.isHighVolatility && g_marketCondition.isStrongTrend)
       g_marketCondition.marketPhase = "Trending";
@@ -672,13 +660,13 @@ void UpdateMarketCondition(int index, const double &high[], const double &low[],
       g_marketCondition.marketPhase = "Quiet Trend";
    else
       g_marketCondition.marketPhase = "Consolidation";
-   
+
    // Calculate efficiency
-   double directionalMovement = MathAbs(close[index] - close[index - 20]);
+   double directionalMovement = MathAbs(close[shift] - close[shift + 20]);
    double totalMovement = 0;
-   for(int i = index - 19; i <= index; i++)
-      totalMovement += MathAbs(close[i] - close[i - 1]);
-   
+   for(int i = shift + 19; i >= shift; --i)
+      totalMovement += MathAbs(close[i] - close[i + 1]);
+
    g_marketCondition.efficiency = totalMovement > 0 ? directionalMovement / totalMovement : 0;
 }
 
@@ -890,27 +878,28 @@ void DisplayDashboardLines(const string &lines[])
 //+------------------------------------------------------------------+
 //| Create signal object with tooltip                               |
 //+------------------------------------------------------------------+
-void CreateSignalObject(int index, datetime time, double price, string signalType, color signalColor)
+void CreateSignalObject(int barIndex, datetime time, double price, string signalType, color signalColor)
 {
    static int signalCount = 0;
    signalCount++;
-   
-   string objName = g_objectPrefix + "Signal_" + (string)signalCount;
-   
+
+   string objName = g_objectPrefix + "Signal_" + IntegerToString(signalCount);
+
    if(ObjectCreate(0, objName, OBJ_ARROW, 0, time, price))
    {
-      ObjectSetInteger(0, objName, OBJPROP_ARROWCODE, signalType == "BUY" ? 233 : (signalType == "SELL" ? 234 : 159));
+      ObjectSetInteger(0, objName, OBJPROP_ARROWCODE, (signalType=="BUY") ? 233 : (signalType=="SELL" ? 234 : 159));
       ObjectSetInteger(0, objName, OBJPROP_COLOR, signalColor);
       ObjectSetInteger(0, objName, OBJPROP_WIDTH, CircleWidth);
+      ObjectSetInteger(0, objName, OBJPROP_ANCHOR, ANCHOR_CENTER);
       ObjectSetInteger(0, objName, OBJPROP_BACK, false);
       ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, false);
       ObjectSetInteger(0, objName, OBJPROP_HIDDEN, true);
-      
-      // Add tooltip if enabled
+
       if(ShowTooltips)
       {
-         string tooltip = StringFormat("%s Signal\nTime: %s\nPrice: %.5f\nST: %.5f\nVWAP: %.5f", 
-                         signalType, TimeToString(time), price, STBuffer[index], VWAPBuffer[index]);
+         string tooltip = StringFormat("%s Signal\nTime: %s\nPrice: %.5f\nST: %.5f\nVWAP: %.5f",
+                                       signalType, TimeToString(time), price,
+                                       STBuffer[barIndex], VWAPBuffer[barIndex]);
          ObjectSetString(0, objName, OBJPROP_TOOLTIP, tooltip);
       }
    }

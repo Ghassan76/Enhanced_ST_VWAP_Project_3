@@ -16,7 +16,7 @@
 //| Enhanced Input Parameters                                        |
 //+------------------------------------------------------------------+
 // General Settings
-input string Separator1 = "═══ General Settings ═══";
+input group "═══ General Settings ═══";
 input ulong   MagicNumber                 = 567890;     // Magic number for trades
 input bool    VerboseLogs                 = true;       // Verbose logging mode
 input bool    EnableEntry                 = true;       // Master enable switch
@@ -24,7 +24,7 @@ input bool    EnableBuy                   = true;       // Allow long trades
 input bool    EnableSell                  = true;       // Allow short trades
 
 // Time and Day Filters
-input string Separator2 = "═══ Time and Day Filters ═══";
+input group "═══ Time and Day Filters ═══";
 input bool    UseTimeFilter               = true;       // Use time filter
 input int     BeginHour                   = 15;         // Trading start hour
 input int     BeginMinute                 = 0;          // Trading start minute
@@ -39,7 +39,7 @@ input bool    TradeFri                    = true;       // Trade on Friday
 input bool    TradeSat                    = false;      // Trade on Saturday
 
 // Multiple Trading Sessions
-input string Separator3 = "═══ Multiple Trading Sessions ═══";
+input group "═══ Multiple Trading Sessions ═══";
 input bool    Session1_Enable             = false;      // Enable session 1
 input int     Session1_StartHour          = 9;          // Session 1 start hour
 input int     Session1_StartMinute        = 0;          // Session 1 start minute
@@ -65,20 +65,20 @@ input int     Session4_EndHour            = 6;          // Session 4 end hour
 input int     Session4_EndMinute          = 0;          // Session 4 end minute
 
 // Market Conditions
-input string Separator4 = "═══ Market Conditions ═══";
+input group "═══ Market Conditions ═══";
 input int     MaxSpreadPts                = 50;         // Maximum spread in points
 input bool    EnableVolatilityFilter      = true;       // Enable volatility filter
 input double  MinVolatilityThreshold      = 0.5;        // Minimum volatility threshold
 
 // Position Sizing
-input string Separator5 = "═══ Position Sizing ═══";
+input group "═══ Position Sizing ═══";
 input bool    DynamicLots                 = true;       // Use dynamic lot sizing
 input double  RiskPct                     = 1.0;        // Risk percentage for dynamic lots
 input double  FixedLot                    = 0.10;       // Fixed lot size
 input int     SlippagePts                 = 30;         // Order slippage
 
 // Stop Loss & Take Profit
-input string Separator6 = "═══ Stop Loss & Take Profit ═══";
+input group "═══ Stop Loss & Take Profit ═══";
 input bool    UseMoneyTargets             = false;      // Use money-based SL/TP
 input double  MoneySLAmount               = 50.0;       // Stop loss in money
 input double  MoneyTPAmount               = 100.0;      // Take profit in money
@@ -86,14 +86,14 @@ input double  PointsSL                    = 500;        // Stop loss in points
 input double  PointsTP                    = 1000;       // Take profit in points
 
 // Enhanced State Management
-input string Separator7 = "═══ State Management ═══";
+input group "═══ State Management ═══";
 input int     FreezeDurationMinutes       = 10;         // Freeze duration after issues
 input int     PostTradeCooldownMin        = 2;          // Cooldown after trade close
 input bool    FreezeOnDataMissing         = true;       // Freeze on missing data
 input bool    EnableConnectionMonitor     = true;       // Monitor connection status
 
 // Enhanced Smart Trailing with Break-Even
-input string Separator8 = "═══ Enhanced Smart Trailing ═══";
+input group "═══ Enhanced Smart Trailing ═══";
 input bool    EnableBreakEven             = true;       // Enable break-even functionality
 input bool    EnableSmartTrailing         = true;       // Enable smart trailing functionality
 input double  BreakEvenPercent            = 40.0;       // Profit % to trigger break-even
@@ -104,13 +104,13 @@ input int     MaxTrailingSteps            = 10;         // Maximum trailing step
 input int     CheckIntervalSec            = 30;         // Timer interval for trailing checks
 
 // Modification Limits
-input string Separator9 = "═══ Modification Limits ═══";
+input group "═══ Modification Limits ═══";
 input int     MaxSLModifications          = 5;          // Max SL changes per position (-1 = unlimited)
 input int     MaxTPModifications          = 3;          // Max TP changes per position (-1 = unlimited)
 input bool    LogModificationLimits       = true;       // Log when limits are reached
 
 // Daily Risk Management
-input string Separator10 = "═══ Daily Risk Management ═══";
+input group "═══ Daily Risk Management ═══";
 input bool    EnableMaxTradesPerDay       = true;       // Enable daily trade limit
 input int     MaxTradesPerDay             = 5;          // Maximum trades per day
 input bool    EnableProfitCap             = false;      // Enable daily profit cap
@@ -119,7 +119,7 @@ input bool    EnableLossLimit             = true;       // Enable daily loss lim
 input double  DailyLossLimit              = 100.0;      // Daily loss limit
 
 // SuperTrend & VWAP Indicator Parameters
-input string Separator11 = "═══ SuperTrend & VWAP Parameters ═══";
+input group "═══ SuperTrend & VWAP Parameters ═══";
 input ENUM_TIMEFRAMES InpIndTimeframe     = PERIOD_H1;  // Indicator timeframe
 input int     ATRPeriod                   = 22;         // ATR period for SuperTrend
 input double  STMultiplier                = 3.0;        // SuperTrend multiplier
@@ -129,10 +129,11 @@ input bool    EnableVWAPFilter            = true;       // Enable VWAP filtering
 input ENUM_APPLIED_PRICE VWAPPriceMethod  = PRICE_TYPICAL; // VWAP calculation price
 input double  MinVolumeThreshold          = 1.0;        // Minimum volume for VWAP
 input bool    ResetVWAPDaily              = true;       // Reset VWAP daily
+input int     VWAPLookbackPeriod          = 100;        // VWAP calculation lookback period
 input uint    SignalBar                   = 1;          // Bar number for signal (0=current, 1=previous)
 
 // Enhanced Signal Filtering
-input string Separator12 = "═══ Enhanced Signal Filtering ═══";
+input group "═══ Enhanced Signal Filtering ═══";
 input double  MinPointsFromVWAP           = 20.0;       // Minimum distance from VWAP in points
 input bool    EnableSignalConfirmation    = true;       // Require signal confirmation
 input int     SignalConfirmationBars      = 2;          // Bars for signal confirmation
@@ -140,7 +141,7 @@ input bool    EnableTrendFilter           = true;       // Enable trend directio
 input int     TrendFilterPeriod           = 50;         // Period for trend filter
 
 // Performance Optimization
-input string Separator13 = "═══ Performance Optimization ═══";
+input group "═══ Performance Optimization ═══";
 input bool    OptimizeCalculations        = true;       // Optimize calculations
 input bool    EnablePerformanceMonitor    = true;       // Monitor EA performance
 input int     StatisticsUpdateInterval    = 60;         // Statistics update interval (seconds)
@@ -161,7 +162,7 @@ static bool Recount = true;                             // Force recalculation f
 static bool BUY_Open = false, BUY_Close = false;       // Buy signal flags
 static bool SELL_Open = false, SELL_Close = false;     // Sell signal flags
 static datetime UpSignalTime, DnSignalTime;            // Signal timestamps
-static CIsNewBar NB;                                    // New bar detector
+static datetime g_lastBarTime = 0;                       // Last processed bar time
 
 // Performance monitoring
 static datetime g_lastPerformanceUpdate = 0;
@@ -171,6 +172,29 @@ static int g_processedTicks = 0;
 // Connection monitoring
 static datetime g_lastConnectionCheck = 0;
 static bool g_connectionLost = false;
+
+//+------------------------------------------------------------------+
+//| Reset daily trading statistics                                   |
+//+------------------------------------------------------------------+
+void ResetDailyStats()
+{
+    g_dailyStats.totalTrades = 0;
+    g_dailyStats.winTrades = 0;
+    g_dailyStats.loseTrades = 0;
+    g_dailyStats.totalProfit = 0.0;
+    g_dailyStats.totalLoss = 0.0;
+    g_dailyStats.maxDrawdown = 0.0;
+    g_dailyStats.maxProfit = 0.0;
+    g_dailyStats.lastTradeTime = 0;
+    g_dailyStats.averageWin = 0.0;
+    g_dailyStats.averageLoss = 0.0;
+    g_dailyStats.profitFactor = 0.0;
+    g_dailyStats.winRate = 0.0;
+    g_dailyStats.consecutiveWins = 0;
+    g_dailyStats.consecutiveLosses = 0;
+    g_dailyStats.maxConsecutiveWins = 0;
+    g_dailyStats.maxConsecutiveLosses = 0;
+}
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -189,7 +213,7 @@ int OnInit()
     STVWAPHandle = iCustom(_Symbol, InpIndTimeframe, "Enhanced_ST_VWAP_Indicator",
                           ATRPeriod, STMultiplier, SourcePrice, TakeWicksIntoAccount,
                           VWAPPriceMethod, MinVolumeThreshold, ResetVWAPDaily,
-                          EnableVWAPFilter, true, MinPointsFromVWAP);
+                          VWAPLookbackPeriod, EnableVWAPFilter, true, MinPointsFromVWAP);
     
     if(STVWAPHandle == INVALID_HANDLE)
     {
@@ -324,8 +348,13 @@ void OnTick()
 //+------------------------------------------------------------------+
 void ProcessEnhancedTradingSignals()
 {
+    // Detect new bar
+    datetime curBarTime = iTime(_Symbol, InpIndTimeframe, 0);
+    bool isNewBar = (curBarTime != g_lastBarTime);
+    if(isNewBar) g_lastBarTime = curBarTime;
+
     // Check for new bar or force recount
-    if(!SignalBar || NB.IsNewBar(_Symbol, InpIndTimeframe) || Recount)
+    if(!SignalBar || isNewBar || Recount)
     {
         // Reset signal flags
         BUY_Open = SELL_Open = BUY_Close = SELL_Close = false;
@@ -343,8 +372,10 @@ void ProcessEnhancedTradingSignals()
         datetime signalTime = iTime(_Symbol, InpIndTimeframe, SignalBar);
         double price = iClose(_Symbol, InpIndTimeframe, SignalBar);
 
+        int dir = (signal[0] > 0) ? 1 : -1;
+
         // Enhanced signal validation
-        if(!ValidateSignalConditions(signalTime, price))
+        if(!ValidateSignalConditions(signalTime, price, dir))
             return;
 
         // Process bullish signal
@@ -400,19 +431,19 @@ void ProcessEnhancedTradingSignals()
 //+------------------------------------------------------------------+
 //| Validate signal conditions                                       |
 //+------------------------------------------------------------------+
-bool ValidateSignalConditions(datetime signalTime, double price)
+bool ValidateSignalConditions(datetime signalTime, double price, int dir)
 {
     // Check if signal is too recent (avoid duplicates)
     if(signalTime <= g_lastSignalTime)
         return false;
     
     // Trend filter validation
-    if(EnableTrendFilter && !ValidateTrendDirection(price))
+    if(EnableTrendFilter && !ValidateTrendDirection(price, dir))
     {
         if(VerboseLogs) Print("Signal rejected by trend filter");
         return false;
     }
-    
+
     // Volatility filter validation
     if(EnableVolatilityFilter && !ValidateVolatility())
     {
@@ -488,7 +519,7 @@ bool ConfirmBearishSignal()
 //+------------------------------------------------------------------+
 //| Validate trend direction                                         |
 //+------------------------------------------------------------------+
-bool ValidateTrendDirection(double currentPrice)
+bool ValidateTrendDirection(double currentPrice, int dir)
 {
     double ma[];
     int maHandle = iMA(_Symbol, InpIndTimeframe, TrendFilterPeriod, 0, MODE_EMA, PRICE_CLOSE);
@@ -503,15 +534,12 @@ bool ValidateTrendDirection(double currentPrice)
     }
     
     bool trendOK = true;
-    
-    // For buy signals, price should be above MA
-    if(BUY_Open && currentPrice < ma[0])
+
+    if(dir > 0 && currentPrice < ma[0])
         trendOK = false;
-        
-    // For sell signals, price should be below MA
-    if(SELL_Open && currentPrice > ma[0])
+    if(dir < 0 && currentPrice > ma[0])
         trendOK = false;
-    
+
     IndicatorRelease(maHandle);
     return trendOK;
 }
@@ -922,6 +950,7 @@ void CheckDailyReset()
         }
             
         ResetDailyStatistics();
+        ResetDailyStats();
         g_lastDayReset = currentDay;
         
         if(VerboseLogs)
