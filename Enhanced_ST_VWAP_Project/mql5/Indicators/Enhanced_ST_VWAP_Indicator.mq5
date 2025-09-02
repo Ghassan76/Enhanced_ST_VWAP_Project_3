@@ -1,10 +1,10 @@
 //+------------------------------------------------------------------+
 //|                                     Enhanced_ST_VWAP_Indicator.mq5 |
-//|              Complete Enhanced SuperTrend with VWAP Filter & Advanced Dashboard |
+//|              Enhanced SuperTrend with VWAP Filter & Clean Parameters |
 //+------------------------------------------------------------------+
-#property copyright "Enhanced SuperTrend with VWAP Filter & Dashboard © 2025"
+#property copyright "Enhanced SuperTrend with VWAP Filter © 2025"
 #property link "https://www.mql5.com"
-#property version "5.00"
+#property version "6.00"
 #property indicator_chart_window
 #property indicator_plots 6
 #property indicator_buffers 9
@@ -36,7 +36,7 @@
 
 #property indicator_type6 DRAW_NONE
 
-//--- Enhanced Input Parameters ---
+//--- CLEAN INPUT PARAMETERS (NO STRING SEPARATORS) ---
 input group "═══ SuperTrend Settings ═══";
 input int ATRPeriod = 22;                    // ATR period for SuperTrend
 input double Multiplier = 3.0;               // SuperTrend multiplier
@@ -52,27 +52,12 @@ input int VWAPLookbackPeriod = 100;         // VWAP calculation lookback
 input group "═══ VWAP Filter Settings ═══";
 input bool EnableVWAPFilter = true;          // Enable VWAP filtering
 input bool ShowVWAPLine = true;              // Show VWAP line on chart
-input double MinPointsFromVWAP = 0.0;        // Minimum distance from VWAP in points
-
-input group "═══ Time Window Settings ═══";
-input bool EnableTimeWindow = false;         // Enable time window filtering
-input int StartHour = 9;                     // Trading start hour
-input int StartMinute = 30;                  // Trading start minute
-input int EndHour = 16;                      // Trading end hour
-input int EndMinute = 0;                     // Trading end minute
-enum TimeWindowMode
-{
-    MODE_DASHBOARD_ONLY = 0,                 // Dashboard only
-    MODE_SIGNALS_ONLY = 1,                   // Signals only
-    MODE_BOTH = 2                            // Both dashboard and signals
-};
-input TimeWindowMode WindowMode = MODE_DASHBOARD_ONLY;
+input double MinPointsFromVWAP = 20.0;       // Minimum distance from VWAP in points
 
 input group "═══ Performance Settings ═══";
 input bool EnableWinRate = true;             // Enable win rate calculation
 input double WinThresholdPoints = 10.0;      // Target threshold in points for win condition
 input int SignalLifetimeBars = 200;         // Signal arrow lifetime in bars
-input bool EnableAdvancedStats = true;       // Enable advanced statistics
 
 input group "═══ Enhanced Dashboard Settings ═══";
 input bool ShowDashboard = true;             // Show dashboard
@@ -84,26 +69,12 @@ input color DashboardBackColor = C'25,25,25'; // Dashboard background color
 input color DashboardBorderColor = clrGray;  // Dashboard border color
 input color DashboardTextColor = clrWhite;   // Dashboard text color
 
-input group "═══ Column Layout Settings ═══";
-input int LabelXOffset = 10;                 // Label column X position
-input int LabelFontSize = 9;                 // Label font size
-input int ValueXOffset = 260;                // Value column X position  
-input int ValueFontSize = 9;                 // Value font size
-input string DashboardFont = "Consolas";     // Dashboard font
-
-input group "═══ Visual Feedback Settings ═══";
+input group "═══ Visual Settings ═══";
 input bool EnableVisualFeedback = true;      // Enable visual signal feedback
 input int CircleWidth = 3;                   // Signal circle width
 input color RejectionColor = clrGray;        // Rejected signal color
 input color BullishAcceptColor = clrDodgerBlue; // Bullish accepted signal color
 input color BearishAcceptColor = clrWhite;   // Bearish accepted signal color
-
-input group "═══ Advanced Settings ═══";
-input bool ShowDebugInfo = false;            // Show debug information
-input int MaxObjectsOnChart = 500;           // Maximum objects on chart
-input bool ShowTooltips = true;              // Show signal tooltips
-input int ObjectCleanupThreshold = 250;      // Object cleanup threshold
-input bool OptimizeCalculations = true;      // Optimize calculations for performance
 
 input group "═══ Alert Settings ═══";
 input bool EnableAlerts = false;             // Enable alerts
@@ -152,11 +123,6 @@ struct SignalStats
    double winRate;
    double profitFactor;
    
-   // Recent performance
-   double last10SignalsPoints;
-   int last10Index;
-   double last10Array[10];
-   
    SignalStats() 
    {
       totalSignals = acceptedSignals = rejectedSignals = 0;
@@ -165,9 +131,6 @@ struct SignalStats
       totalPoints = winningPoints = losingPoints = 0;
       winningSignals = losingSignals = 0;
       averageWin = averageLoss = winRate = profitFactor = 0;
-      last10SignalsPoints = 0;
-      last10Index = 0;
-      ArrayInitialize(last10Array, 0);
    }
 };
 
@@ -230,7 +193,7 @@ int OnInit()
    PlotIndexSetInteger(4, PLOT_ARROW, 234);  // Down arrow for sell signals
    PlotIndexSetInteger(5, PLOT_ARROW, 159);  // Dot for rejected signals
    if(!ShowVWAPLine)
-      PlotIndexSetInteger(1, PLOT_DRAW_TYPE, DRAW_NONE);
+      PlotIndexSetInteger(2, PLOT_DRAW_TYPE, DRAW_NONE);
 
    // Set array directions to time series (0 = current bar)
    ArraySetAsSeries(STBuffer, true);
@@ -244,14 +207,14 @@ int OnInit()
    ArraySetAsSeries(StrengthBuffer, true);
 
    // Set indicator properties
-   IndicatorSetString(INDICATOR_SHORTNAME, "Enhanced ST&VWAP v5.0");
+   IndicatorSetString(INDICATOR_SHORTNAME, "Enhanced ST&VWAP v6.0");
    IndicatorSetInteger(INDICATOR_DIGITS, _Digits);
 
    // Initialize dashboard
    if(ShowDashboard)
       CreateDashboard();
 
-   Print("Enhanced ST&VWAP Indicator v5.0 initialized successfully");
+   Print("Enhanced ST&VWAP Indicator v6.0 initialized successfully");
    return(INIT_SUCCEEDED);
 }
 
@@ -291,10 +254,6 @@ int OnCalculate(const int rates_total,
       return(0);
 
    int start = (prev_calculated == 0) ? rates_total - 1 : rates_total - prev_calculated;
-
-   // Performance optimization: skip if same bar already calculated
-   if(OptimizeCalculations && start == g_lastCalculatedBar && prev_calculated > 0)
-      return(rates_total);
 
    double atr[];
    ArraySetAsSeries(atr, true);
@@ -338,7 +297,7 @@ int OnCalculate(const int rates_total,
 
    // Clean up old signal objects periodically
    static int cleanupCounter = 0;
-   if(++cleanupCounter >= ObjectCleanupThreshold)
+   if(++cleanupCounter >= 250)
    {
       CleanupOldSignalObjects();
       cleanupCounter = 0;
@@ -506,7 +465,6 @@ void ProcessEnhancedSignals(int shift, const datetime &time[], const double &hig
    if(currentDir != prevDir)
    {
       bool vwapOK = true;
-      bool timeOK = true;
 
       // VWAP filter validation
       if(EnableVWAPFilter)
@@ -518,17 +476,14 @@ void ProcessEnhancedSignals(int shift, const datetime &time[], const double &hig
             vwapOK = close[shift] < VWAPBuffer[shift] && distPoints >= MinPointsFromVWAP;
       }
 
-      // Time window validation
-      if(EnableTimeWindow && (WindowMode == MODE_SIGNALS_ONLY || WindowMode == MODE_BOTH))
-         timeOK = IsInTimeWindow(time[shift]);
-
       // Market condition validation
       bool marketOK = IsMarketConditionFavorable(shift);
+      bool signalAccepted = vwapOK && marketOK;
 
       // Update signal statistics
       g_signalStats.totalSignals++;
 
-      if(vwapOK && timeOK && marketOK)
+      if(signalAccepted)
       {
          g_signalStats.acceptedSignals++;
 
@@ -579,27 +534,9 @@ void ProcessEnhancedSignals(int shift, const datetime &time[], const double &hig
             CreateSignalObject(shift, time[shift], RejectArrowBuffer[shift], "REJECTED", RejectionColor);
       }
 
-      if(EnableWinRate && EnableAdvancedStats)
+      if(EnableWinRate)
          UpdatePerformanceStats(shift, currentDir, close);
    }
-}
-
-//+------------------------------------------------------------------+
-//| Check if current time is within trading window                  |
-//+------------------------------------------------------------------+
-bool IsInTimeWindow(datetime time)
-{
-   MqlDateTime t;
-   TimeToStruct(time, t);
-   
-   int currentMinutes = t.hour * 60 + t.min;
-   int startMinutes = StartHour * 60 + StartMinute;
-   int endMinutes = EndHour * 60 + EndMinute;
-   
-   if(startMinutes <= endMinutes)
-      return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
-   else // Overnight session
-      return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
 }
 
 //+------------------------------------------------------------------+
@@ -675,9 +612,7 @@ void UpdateMarketCondition(int shift, const double &high[], const double &low[],
 //+------------------------------------------------------------------+
 void UpdatePerformanceStats(int index, int direction, const double &close[])
 {
-   // This is a simplified performance tracking
-   // In real trading, this would track actual trade results
-   
+   // Simplified performance tracking
    static int lastSignalIndex = -1;
    static int lastDirection = 0;
    
@@ -703,15 +638,6 @@ void UpdatePerformanceStats(int index, int direction, const double &close[])
       }
       
       g_signalStats.totalPoints += points;
-      
-      // Update last 10 signals tracking
-      g_signalStats.last10Array[g_signalStats.last10Index] = points;
-      g_signalStats.last10Index = (g_signalStats.last10Index + 1) % 10;
-      
-      // Calculate last 10 performance
-      g_signalStats.last10SignalsPoints = 0;
-      for(int i = 0; i < 10; i++)
-         g_signalStats.last10SignalsPoints += g_signalStats.last10Array[i];
       
       // Update derived statistics
       if(g_signalStats.winningSignals + g_signalStats.losingSignals > 0)
@@ -772,7 +698,7 @@ void UpdateDashboard(int lastBar)
    ArrayResize(lines, 0);
    
    // Header
-   AddDashboardLine(lines, "═══ Enhanced ST&VWAP v5.0 ═══");
+   AddDashboardLine(lines, "═══ Enhanced ST&VWAP v6.0 ═══");
    AddDashboardLine(lines, "");
    
    // Current market data
@@ -797,8 +723,8 @@ void UpdateDashboard(int lastBar)
                     g_signalStats.bearishAccepted, g_signalStats.bearishRejected));
    AddDashboardLine(lines, "");
    
-   // Performance metrics (if enabled)
-   if(EnableAdvancedStats)
+   // Performance metrics
+   if(EnableWinRate)
    {
       AddDashboardLine(lines, "═══ Performance Metrics ═══");
       AddDashboardLine(lines, StringFormat("Win Rate: %.1f%%", g_signalStats.winRate));
@@ -806,7 +732,6 @@ void UpdateDashboard(int lastBar)
       AddDashboardLine(lines, StringFormat("Avg Win: %.1f pts", g_signalStats.averageWin));
       AddDashboardLine(lines, StringFormat("Avg Loss: %.1f pts", g_signalStats.averageLoss));
       AddDashboardLine(lines, StringFormat("Total Points: %.1f", g_signalStats.totalPoints));
-      AddDashboardLine(lines, StringFormat("Last 10 Signals: %.1f pts", g_signalStats.last10SignalsPoints));
       AddDashboardLine(lines, "");
    }
    
@@ -818,21 +743,9 @@ void UpdateDashboard(int lastBar)
    AddDashboardLine(lines, StringFormat("Efficiency: %.2f", g_marketCondition.efficiency));
    AddDashboardLine(lines, "");
    
-   // Time window info
-   if(EnableTimeWindow)
-   {
-      AddDashboardLine(lines, "═══ Time Window ═══");
-      bool inWindow = IsInTimeWindow(TimeCurrent());
-      AddDashboardLine(lines, StringFormat("Status: %s", inWindow ? "ACTIVE" : "INACTIVE"));
-      AddDashboardLine(lines, StringFormat("Window: %02d:%02d - %02d:%02d", 
-                       StartHour, StartMinute, EndHour, EndMinute));
-      AddDashboardLine(lines, "");
-   }
-   
    // System info
    AddDashboardLine(lines, "═══ System Info ═══");
    AddDashboardLine(lines, StringFormat("Last Update: %s", TimeToString(TimeCurrent(), TIME_MINUTES)));
-   AddDashboardLine(lines, StringFormat("Bars Processed: %d", lastBar + 1));
    AddDashboardLine(lines, StringFormat("Objects: %d", ObjectsTotal(0, -1, -1)));
    
    // Display all lines
@@ -861,13 +774,13 @@ void DisplayDashboardLines(const string &lines[])
       if(ObjectFind(0, objName) < 0)
          ObjectCreate(0, objName, OBJ_LABEL, 0, 0, 0);
       
-      ObjectSetInteger(0, objName, OBJPROP_XDISTANCE, DashboardX + LabelXOffset);
+      ObjectSetInteger(0, objName, OBJPROP_XDISTANCE, DashboardX + 10);
       ObjectSetInteger(0, objName, OBJPROP_YDISTANCE, DashboardY + 25 + (i * 16));
       ObjectSetInteger(0, objName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
       ObjectSetInteger(0, objName, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
       ObjectSetString(0, objName, OBJPROP_TEXT, lines[i]);
-      ObjectSetString(0, objName, OBJPROP_FONT, DashboardFont);
-      ObjectSetInteger(0, objName, OBJPROP_FONTSIZE, LabelFontSize);
+      ObjectSetString(0, objName, OBJPROP_FONT, "Consolas");
+      ObjectSetInteger(0, objName, OBJPROP_FONTSIZE, 9);
       ObjectSetInteger(0, objName, OBJPROP_COLOR, DashboardTextColor);
       ObjectSetInteger(0, objName, OBJPROP_BACK, false);
       ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, false);
@@ -895,13 +808,10 @@ void CreateSignalObject(int barIndex, datetime time, double price, string signal
       ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, false);
       ObjectSetInteger(0, objName, OBJPROP_HIDDEN, true);
 
-      if(ShowTooltips)
-      {
-         string tooltip = StringFormat("%s Signal\nTime: %s\nPrice: %.5f\nST: %.5f\nVWAP: %.5f",
-                                       signalType, TimeToString(time), price,
-                                       STBuffer[barIndex], VWAPBuffer[barIndex]);
-         ObjectSetString(0, objName, OBJPROP_TOOLTIP, tooltip);
-      }
+      string tooltip = StringFormat("%s Signal\nTime: %s\nPrice: %.5f\nST: %.5f\nVWAP: %.5f",
+                                    signalType, TimeToString(time), price,
+                                    STBuffer[barIndex], VWAPBuffer[barIndex]);
+      ObjectSetString(0, objName, OBJPROP_TOOLTIP, tooltip);
    }
 }
 
